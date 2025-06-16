@@ -9,6 +9,7 @@ module.exports = (logger, [C_DEVICES, C_STORE, C_VAULT]) => {
 
             C_DEVICES.add({
                 name,
+                icon: "fa-solid fa-wifi",
                 labels: filter.labels,
                 interfaces: [{
                     settings: {
