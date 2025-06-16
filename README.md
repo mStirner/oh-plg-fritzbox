@@ -11,23 +11,19 @@ Add plugin item via HTTP API:<br />
 [PUT] `http://{{HOST}}:{{PORT}}/api/plugins/`
 ```json
 {
-   "name":"Plugin Boilerplate",
-   "version":1,
+   "name":"Fritzbox SmartHome Integration",
+   "version":"0.0.1",
    "intents":[
       "devices",
       "endpoints",
-      "plugins",
-      "rooms",
-      "ssdp",
       "store",
-      "users",
       "vault"
    ],
-   "uuid": "00000000-0000-0000-0000-000000000000"
+   "uuid": "e1e18510-4203-4aa9-bccb-dbc31fe99926"
 }
-
 ```
+
 Mount the source code into the backend plugins folder
 ```sh
-sudo mount --bind ~/projects/OpenHaus/plugins/plugin-boilerplate/ ~/projects/OpenHaus/backend/plugins/00000000-0000-0000-0000-000000000000/
+sudo mount --bind ~/projects/OpenHaus/plugins/oh-plg-fritzbox/ ~/projects/OpenHaus/backend/plugins/e1e18510-4203-4aa9-bccb-dbc31fe99926/
 ```

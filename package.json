@@ -1,7 +1,7 @@
 {
-  "name": "plugin-boilerplate",
+  "name": "oh-plg-fritzbox",
   "private": "true",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -25,5 +25,8 @@
     "grunt": "^1.6.1",
     "grunt-contrib-uglify": "^5.2.2",
     "grunt-env": "^1.0.1"
+  },
+  "dependencies": {
+    "xml2js": "^0.6.2"
   }
 }

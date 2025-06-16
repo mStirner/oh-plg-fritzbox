@@ -2,41 +2,39 @@ module.exports = (info, logger, init) => {
     return init([
         "devices",
         "endpoints",
-        "plugins",
-        "rooms",
-        "ssdp",
         "store",
-        "users",
         "vault"
     ], (scope, [
         C_DEVICES,
         C_ENDPOINTS,
-        C_PLUGINS,
-        C_ROOMS,
-        C_SSDP,
         C_STORE,
-        C_USERS,
         C_VAULT
     ]) => {
 
+        logger.debug(`Hello from plugin "${info.name}"`);
 
-        // do something here with the components
-        // documentation about them can be found on:
-        // https://docs.open-haus.io/#/backend/components/
+        
+        // setup device/store/vault items
+        require("./setup.js")(logger, [
+            C_DEVICES,
+            C_STORE,
+            C_VAULT
+        ]);
 
+        // fetch device/store/vault items & pass to fritzbox.js & handler.js
+        // fritzbox.js setups request wrapper and methods
+        // handler.js uses fritzbox.js methods for handling command & polling
+        require("./bootstrap.js")(logger, [
+            C_DEVICES,
+            C_STORE,
+            C_VAULT,            
+            C_ENDPOINTS
+        ]);
+        
 
-        // scope = plugin class instace
-        console.log(scope);
-
-
-        // example logger usage
-        logger.trace("Hello World from plugin ", info.name);
-        logger.verbose("Hello World from plugin ", info.name);
-        logger.debug("Hello World from plugin ", info.name);
-        logger.info("Hello World from plugin ", info.name);
-        logger.warn("Hello World from plugin ", info.name);
-        logger.error("Hello World from plugin ", info.name);
-
+        // used for trouble shooting http connection
+        // for development purpose only
+        //require("./debug.js")(logger, [C_DEVICES, C_STORE, C_VAULT])
 
     });
 };
