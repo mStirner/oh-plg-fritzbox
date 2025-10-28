@@ -79,8 +79,8 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
             });
 
 
+            // ALARMS
             (() => {
-
 
                 filter(missing, {
                     bitmask: FUNCTION_ALARM
@@ -123,99 +123,119 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
                 C_ENDPOINTS.items.filter((endpoint) => {
                     return endpoint.labels.value("bitmask") & FUNCTION_ALARM;
                 }).forEach((endpoint) => {
+                    try {
 
-                    let identifier = endpoint.labels.value("identifier");
-                    let [alarm, present, battery] = endpoint.states;
+                        let identifier = endpoint.labels.value("identifier");
+                        let [alarm, present, battery] = endpoint.states;
 
-                    let obj = alarms.find((item) => {
-                        return item.identifier === identifier;
-                    });
+                        let obj = alarms.find((item) => {
+                            return item.identifier === identifier;
+                        });
 
-                    if (!obj) {
-                        return;
+                        if (!obj) {
+                            return;
+                        }
+
+                        alarm.value = obj.alert.state === "1";
+                        present.value = obj.present === "1";
+                        battery.value = parseInt(obj.battery) || null;
+
+                    } catch (err) {
+
+                        logger.warn(err, "Could not set endpoint state");
+
                     }
-
-                    alarm.value = obj.alert.state === "1";
-                    present.value = obj.present === "1";
-                    battery.value = parseInt(obj.battery) || null;
-
                 });
 
             })();
 
 
+            // THERMOSTAT
             (() => {
 
                 filter(missing, {
                     bitmask: FUNCTION_THERMOSTAT
                 }).forEach((obj) => {
+                    try {
 
-                    C_ENDPOINTS.add({
-                        name: obj.name,
-                        device: device._id,
-                        icon: "fa-solid fa-temperature-high",
-                        labels: [
-                            `device=${device._id}`,
-                            `identifier=${obj.identifier}`,
-                            `bitmask=${FUNCTION_THERMOSTAT}`,
-                            ...labels
-                        ],
-                        commands: [{
-                            name: "Themperature",
-                            alias: "TEMP_SHOULD",
-                            interface: device.interfaces[0]._id,
-                            params: [{
+                        logger.debug(`Add new Thermostat endpoint "${obj.name}"`);
+
+                        if (obj?.present !== "1") {
+                            logger.warn(`Endpoint "${obj.name}" item is not present, use default values!`);
+                        }
+
+                        C_ENDPOINTS.add({
+                            name: obj.name,
+                            device: device._id,
+                            icon: "fa-solid fa-temperature-high",
+                            labels: [
+                                `device=${device._id}`,
+                                `identifier=${obj.identifier}`,
+                                `bitmask=${FUNCTION_THERMOSTAT}`,
+                                ...labels
+                            ],
+                            commands: [{
+                                name: "Themperature",
+                                alias: "TEMP_SHOULD",
+                                interface: device.interfaces[0]._id,
+                                params: [{
+                                    type: "number",
+                                    key: "value",
+                                    min: 8,
+                                    max: 28
+                                }]
+                            }, {
+                                name: "Off",
+                                alias: "HEATING_OFF",
+                                interface: device.interfaces[0]._id,
+                            }, {
+                                name: "On",
+                                alias: "HEATING_ON",
+                                interface: device.interfaces[0]._id,
+                            }],
+                            states: [{
+                                name: "Temperature",
+                                alias: "TEMP_SHOULD",
                                 type: "number",
-                                key: "value",
+                                value: api2temp(obj.hkr.tsoll) || null,
                                 min: 8,
                                 max: 28
+                            }, {
+                                name: "Measured Temp",
+                                alias: "TEMP_CURRENT",
+                                type: "number",
+                                value: api2temp(obj.hkr.tist) || null,
+                                min: 8,
+                                max: 28
+                            }, {
+                                name: "Present",
+                                alias: "PRESENT",
+                                type: "boolean",
+                                value: obj.present === "1"
+                            }, {
+                                name: "Locked",
+                                alias: "LOCKED",
+                                type: "boolean",
+                                value: obj.hkr.lock === "1"
+                            }, {
+                                name: "Batterie",
+                                alias: "BATTERY",
+                                type: "number",
+                                value: parseInt(obj.battery) || 0
+                            }, {
+                                name: "Mode",
+                                alias: "MODE",
+                                type: "string",
+                                value: null
                             }]
-                        }, {
-                            name: "Off",
-                            alias: "HEATING_OFF",
-                            interface: device.interfaces[0]._id,
-                        }, {
-                            name: "On",
-                            alias: "HEATING_ON",
-                            interface: device.interfaces[0]._id,
-                        }],
-                        states: [{
-                            name: "Themperature",
-                            alias: "TEMP_SHOULD",
-                            type: "number",
-                            value: api2temp(obj.hkr.tsoll),
-                            min: 8,
-                            max: 28
-                        }, {
-                            name: "Measured Temp",
-                            alias: "TEMP_CURRENT",
-                            type: "number",
-                            value: api2temp(obj.hkr.tist),
-                            min: 8,
-                            max: 28
-                        }, {
-                            name: "Present",
-                            alias: "PRESENT",
-                            type: "boolean",
-                            value: obj.present === "1"
-                        }, {
-                            name: "Locked",
-                            alias: "LOCKED",
-                            type: "boolean",
-                            value: obj.hkr.lock === "1"
-                        }, {
-                            name: "Batterie",
-                            alias: "BATTERY",
-                            type: "number",
-                            value: parseInt(obj.battery) || 0
-                        }, {
-                            name: "Mode",
-                            alias: "MODE",
-                            type: "string",
-                            value: null
-                        }]
-                    });
+                        });
 
+
+                    } catch (err) {
+
+                        logger.warn(err, `Could not add new Thermostat endpoint "${obj.name}" item`);
+
+                    }
                 });
 
                 let thermostat = filter(list, {
@@ -225,33 +245,48 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
                 C_ENDPOINTS.items.filter((endpoint) => {
                     return endpoint.labels.value("bitmask") & FUNCTION_THERMOSTAT;
                 }).forEach((endpoint) => {
+                    try {
 
-                    let identifier = endpoint.labels.value("identifier");
-                    let [TEMP_SHOULD, TEMP_CURRENT, PRESENT, LOCKED, BATTERY, MODE] = endpoint.states;
+                        let identifier = endpoint.labels.value("identifier");
+                        let [TEMP_SHOULD, TEMP_CURRENT, PRESENT, LOCKED, BATTERY, MODE] = endpoint.states;
 
-                    let obj = thermostat.find((item) => {
-                        return item.identifier === identifier;
-                    });
+                        let obj = thermostat.find((item) => {
+                            return item.identifier === identifier;
+                        });
 
-                    if (!obj) {
-                        return;
+                        if (!obj) {
+                            return;
+                        }
+
+                        /*
+                        console.group("Endpoint", endpoint.name);
+                        console.log("TEMP_SHOULD", obj.hkr.tsoll, api2temp(obj.hkr.tsoll));
+                        console.log("TEMP_CURRENT", obj.hkr.tist, api2temp(obj.hkr.tist));
+                        console.log("PRESENT", obj.present === "1");
+                        console.log("LOCKED", obj.hkr.lock === "1");
+                        console.log("BATTERY", parseInt(obj.battery) || 0);
+                        console.groupEnd();
+                        */
+
+                        TEMP_SHOULD.value = api2temp(obj.hkr.tsoll) || null;
+                        TEMP_CURRENT.value = api2temp(obj.hkr.tist) || null;
+                        PRESENT.value = obj.present === "1";
+                        LOCKED.value = obj.hkr.lock === "1";
+                        BATTERY.value = parseInt(obj.battery) || 0;
+
+                        if (obj.hkr.tsoll === "254") {
+                            MODE.value = "on";
+                        } else if (obj.hkr.tsoll === "253") {
+                            MODE.value = "off";
+                        } else {
+                            MODE.value = "heating";
+                        }
+
+                    } catch (err) {
+
+                        logger.warn(err, "Could not set endpoint state");
+
                     }
-
-                    TEMP_SHOULD.value = api2temp(obj.hkr.tsoll);
-                    TEMP_CURRENT.value = api2temp(obj.hkr.tist);
-                    PRESENT.value = obj.present === "1";
-                    LOCKED.value = obj.hkr.lock === "1"
-                    BATTERY.value = parseInt(obj.battery) || 0;
-
-                    if (obj.hkr.tsoll === "254") {
-                        MODE.value = "on";
-                    } else if (obj.hkr.tsoll === "253") {
-                        MODE.value = "off";
-                    } else {
-                        MODE.value = "heating";
-                    }
-
-
                 });
 
             })();
