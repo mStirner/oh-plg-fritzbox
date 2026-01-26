@@ -1,5 +1,19 @@
-const infinity = require("../../helper/infinity.js");
-const debounce = require("../../helper/debounce.js");
+function throttle(callback, interval = 10) {
+
+    let lastCall = 0;
+
+    return function (...args) {
+
+        const now = Date.now();
+
+        if (now - lastCall >= interval) {
+            lastCall = now;
+            callback.apply(this, args);
+        }
+
+    };
+
+}
 
 const fritzbox = require("./fritzbox.js");
 const handler = require("./handler.js")
@@ -60,10 +74,9 @@ module.exports = async (logger, [C_DEVICES, C_STORE, C_VAULT, C_ENDPOINTS]) => {
             }
         });
 
-        let worker = debounce((redo) => {
-            try {
 
-                init = redo;
+        init = throttle(() => {
+            try {
 
                 let methods = fritzbox(logger, [
                     device,
@@ -81,7 +94,53 @@ module.exports = async (logger, [C_DEVICES, C_STORE, C_VAULT, C_ENDPOINTS]) => {
                 ], [
                     C_DEVICES,
                     C_ENDPOINTS
-                ], redo);
+                ], init);
+
+            } catch (err) {
+
+                logger.warn(err, "Something happend in fritzbox or handler");
+
+            }
+        }, 5000);
+
+
+        init();
+
+        /*
+        let worker = debounce((redo) => {
+            try {
+
+                init = () => {
+
+                    console.log("Init called redo");
+
+                    redo();
+
+                };
+
+                let methods = fritzbox(logger, [
+                    device,
+                    store,
+                    vault
+                ], [
+                    C_DEVICES,
+                    C_ENDPOINTS
+                ]);
+
+                handler(logger, methods, [
+                    device,
+                    store,
+                    vault
+                ], [
+                    C_DEVICES,
+                    C_ENDPOINTS
+                ], () => {
+
+                    console.log("HAndler called redo!");
+
+                    redo();
+
+                });
 
 
             } catch (err) {
@@ -89,9 +148,10 @@ module.exports = async (logger, [C_DEVICES, C_STORE, C_VAULT, C_ENDPOINTS]) => {
                 logger.warn(err, "Something happend in fritzbox or handler");
 
             }
-        }, 1000);
+        }, 5000);
 
         infinity(worker, 10_000);
+        */
 
     });
 

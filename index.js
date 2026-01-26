@@ -13,7 +13,6 @@ module.exports = (info, logger, init) => {
 
         logger.debug(`Hello from plugin "${info.name}"`);
 
-        
         // setup device/store/vault items
         require("./setup.js")(logger, [
             C_DEVICES,
@@ -27,10 +26,10 @@ module.exports = (info, logger, init) => {
         require("./bootstrap.js")(logger, [
             C_DEVICES,
             C_STORE,
-            C_VAULT,            
+            C_VAULT,
             C_ENDPOINTS
         ]);
-        
+
 
         // used for trouble shooting http connection
         // for development purpose only

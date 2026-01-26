@@ -1,6 +1,8 @@
-const { FUNCTION_ALARM, FUNCTION_THERMOSTAT } = require("./bitmasks.js");
 const { temp2api, api2temp } = require("./helper.js");
 const { labels } = require("./definitions.js");
+
+const bitmasks = require("./bitmasks.js");
+const { FUNCTION_ALARM, FUNCTION_THERMOSTAT, FUNCTION_OUTLET, FUNCTION_COLORCONTROL } = bitmasks;
 
 module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessionID, command }, [device, store, vault], [C_DEVICES, C_ENDPOINTS], redo) => {
 
@@ -22,44 +24,72 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
             device: device._id,
             labels
         }, (endpoint) => {
-            if (endpoint.labels.value("bitmask") & FUNCTION_THERMOSTAT) {
+            try {
 
-                endpoint.commands.forEach((cmd) => {
-                    cmd.setHandler(({ params }, done) => {
+                if (endpoint.labels.value("bitmask") & FUNCTION_THERMOSTAT) {
 
-                        logger.verbose("Handle command", cmd.name, params);
-                        let ain = endpoint.labels.value("identifier");
+                    endpoint.commands.forEach((cmd) => {
+                        cmd.setHandler(({ params }, done) => {
 
-                        if (cmd.alias === "TEMP_SHOULD") {
+                            logger.verbose("Handle command", cmd.name, params);
+                            let ain = endpoint.labels.value("identifier");
 
-                            let { value } = params.lean();
+                            if (cmd.alias === "TEMP_SHOULD") {
 
-                            command(sid, "sethkrtsoll", ain, temp2api(value)).then(() => {
-                                done(null, true);
-                            }).catch(done);
+                                let { value } = params.lean();
 
-                        } else {
+                                command(sid, "sethkrtsoll", ain, temp2api(value)).then(() => {
+                                    done(null, true);
+                                }).catch(done);
 
-                            let val = (() => {
-                                switch (cmd.alias) {
-                                    case "HEATING_ON": return "on";
-                                    case "HEATING_OFF": return "off";
-                                }
-                            })();
+                            } else {
 
-                            command(sid, "sethkrtsoll", ain, temp2api(val)).then(() => {
-                                done(null, true);
-                            }).catch(done);
+                                let val = (() => {
+                                    switch (cmd.alias) {
+                                        case "HEATING_ON": return "on";
+                                        case "HEATING_OFF": return "off";
+                                    }
+                                })();
 
-                        }
+                                command(sid, "sethkrtsoll", ain, temp2api(val)).then(() => {
+                                    done(null, true);
+                                }).catch(done);
+
+                            }
 
 
+                        });
                     });
-                });
+
+                } else if (endpoint.labels.value("bitmask") & FUNCTION_OUTLET) {
+
+                    endpoint.commands.forEach((cmd) => {
+                        cmd.setHandler(({ params }, done) => {
+
+                            logger.verbose("Handle command", cmd.name, params, endpoint.name);
+                            let ain = endpoint.labels.value("identifier");
+
+                            let fnc = "setswitchon";
+
+                            if (cmd.alias === "OFF") {
+                                fnc = "setswitchoff";
+                            }
+
+                            command(sid, fnc, ain).then(() => {
+                                done(null, true);
+                            }).catch(done);
+
+                        });
+                    });
+
+                }
+
+            } catch (err) {
+
+                console.log("Could not send command for endpoint", err)
 
             }
         });
-
 
         loop = async () => {
 
@@ -292,9 +322,118 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
             })();
 
 
+            // SOCKETS/PLUGS/OUTLETS
+            (() => {
+
+                filter(missing, {
+                    bitmask: FUNCTION_OUTLET
+                }).forEach((obj) => {
+
+                    C_ENDPOINTS.add({
+                        name: obj.name,
+                        device: device._id,
+                        icon: "fa-solid fa-plug",
+                        labels: [
+                            `device=${device._id}`,
+                            `identifier=${obj.identifier}`,
+                            `bitmask=${FUNCTION_OUTLET}`,
+                            ...labels
+                        ],
+                        commands: [{
+                            name: "On",
+                            alias: "ON",
+                            interface: device.interfaces[0]._id,
+                        }, {
+                            name: "Off",
+                            alias: "OFF",
+                            interface: device.interfaces[0]._id,
+                        }],
+                        states: [{
+                            name: "State",
+                            alias: "STATE",
+                            type: "number",
+                            value: parseInt(obj?.switch?.state || 0)
+                        }, {
+                            name: "Locked",
+                            alias: "LOCKED",
+                            type: "boolean",
+                            value: obj?.switch?.lock === "1"
+                        }, {
+                            name: "Mode",
+                            alias: "MODE",
+                            type: "string",
+                            value: obj?.switch?.mode || "unknown"
+                        }, {
+                            name: "Present",
+                            alias: "PRESENT",
+                            type: "boolean",
+                            value: obj.present === "1"
+                        }, {
+                            name: "Voltage",
+                            alias: "VOLTAGE",
+                            type: "number",
+                            value: Math.floor(parseInt(obj?.powermeter?.voltage || 0) / 1000)
+                        }, {
+                            name: "Power",
+                            alias: "POWER",
+                            type: "number",
+                            value: Math.floor(parseInt(obj?.powermeter?.power || 0) / 1000)
+                        }, {
+                            name: "Energy",
+                            alias: "ENERGY",
+                            type: "number",
+                            value: parseInt(obj?.powermeter?.energy || 0)
+                        }, {
+                            name: "Temperature",
+                            alias: "TEMPERATURE",
+                            type: "number",
+                            value: Math.floor(parseInt(obj?.temperature?.celsius || 0) / 10)
+                        }]
+                    });
+
+                });
+
+
+                let outlets = filter(list, {
+                    bitmask: FUNCTION_OUTLET
+                });
+
+                C_ENDPOINTS.items.filter((endpoint) => {
+                    return endpoint.labels.value("bitmask") & FUNCTION_OUTLET;
+                }).forEach((endpoint) => {
+                    try {
+
+                        let identifier = endpoint.labels.value("identifier");
+                        let [state, locked, mode, present, voltage, power, energy, temperature] = endpoint.states;
+
+                        let obj = outlets.find((item) => {
+                            return item.identifier === identifier;
+                        });
+
+                        if (!obj) {
+                            return;
+                        }
+
+                        state.value = parseInt(obj?.switch?.state || 0);
+                        locked.value = obj?.switch?.lock === "1";
+                        mode.value = obj?.switch?.mode || "unknown";
+                        present.value = obj.present === "1";
+                        voltage.value = Math.floor(parseInt(obj?.powermeter?.voltage || 0) / 1000);
+                        power.value = Math.floor(parseInt(obj?.powermeter?.power || 0) / 1000);
+                        energy.value = parseInt(obj?.powermeter?.energy || 0);
+                        temperature.value = Math.floor(parseInt(obj?.temperature?.celsius || 0) / 10);
+
+                    } catch (err) {
+
+                        logger.warn(err, "Could not set endpoint state");
+
+                    }
+                });
+
+            })();
 
             if (!stop) {
-                timeout = setTimeout(loop, 5000);
+                timeout = setTimeout(loop, polling);
             }
 
         }
@@ -302,6 +441,8 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
         await loop();
 
     } catch (err) {
+
+        logger.error(err, "Catched Error:")
 
         stop = true;
         clearTimeout(timeout);
@@ -315,20 +456,23 @@ module.exports = async (logger, { getDeviceList, filter, getChallenge, getSessio
                 // save new session id
                 // wait for bootstrap to re-init due to changes
                 await secret.encrypt(sid);
-
-                //stop = false;
-                //await loop();
+                setTimeout(redo, polling);
 
             } catch (err) {
 
-                logger.warn(err, "Could not get or store session id");
-
-                redo();
+                logger.warn(err, "Could not get or store session id, retry...");
+                setTimeout(redo, polling);
 
             }
-        } else {
+        } /* else if (err.code === "TIMEDOUT" || err === "TIMEDOUT") {
 
-            logger.error(err, "Could not fetch device list");
+            // does not work, never reached
+            // what does a connecton attempt return?
+
+        } */ else {
+
+            logger.error(err, "Could not fetch device list:");
+            setTimeout(redo, polling);
 
         }
 

@@ -137,6 +137,11 @@ module.exports = (logger, [device, store, vault]) => {
 
             let { body } = await request(`/webservices/homeautoswitch.lua?${query.toString()}`);
 
+            if (cmd !== "getdevicelistinfos") {
+                console.log("CMD: ", cmd);
+                console.log("Response", body);
+            }
+
             return body;
 
         } catch (err) {
